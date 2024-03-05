@@ -6,7 +6,7 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const idgenerator = require('idgenerator');
 const app = express();
-const urlVal = require('urlval');
+const url = require('url');
 
 // Basic Configuration
 const port = process.env.PORT || 3000;
