@@ -16,7 +16,7 @@ mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopol
 // Define URL Schema
 const urlSchema = new Schema({
   original_url: String,
-  short_url: Number
+  short_url: String // Change to String for storing short URL
 });
 
 const Url = mongoose.model('Url', urlSchema);
@@ -33,6 +33,12 @@ app.use(express.json());
 app.get('/', function(req, res) {
   res.sendFile(process.cwd() + '/views/index.html');
 });
+
+// Function to generate short URL
+const generateShortUrl = async () => {
+  const count = await Url.countDocuments();
+  return (count + 1).toString(); // Convert to string for shorter representation
+};
 
 app.post('/api/shorturl', async (req, res) => {
   const { url } = req.body;
@@ -57,9 +63,8 @@ app.post('/api/shorturl', async (req, res) => {
       return res.json({ original_url: existingUrl.original_url, short_url: existingUrl.short_url });
     }
 
-    // Generate unique short URL based on database count
-    const count = await Url.countDocuments();
-    const short_url = count + 1;
+    // Generate unique short URL
+    const short_url = await generateShortUrl();
 
     // Save new URL to database
     const newUrl = new Url({ original_url: url, short_url });
@@ -68,7 +73,7 @@ app.post('/api/shorturl', async (req, res) => {
     res.json({ original_url: url, short_url });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Error processing request' });
   }
 });
 
@@ -76,7 +81,7 @@ app.get('/api/shorturl/:shortUrl', async (req, res) => {
   const { shortUrl } = req.params;
 
   try {
-    const url = await Url.findOne({ short_url: Number(shortUrl) });
+    const url = await Url.findOne({ short_url: shortUrl });
 
     if (!url) {
       return res.json({ error: 'No short URL found for the given input' });
@@ -85,7 +90,7 @@ app.get('/api/shorturl/:shortUrl', async (req, res) => {
     res.redirect(url.original_url);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Error processing request' });
   }
 });
 
