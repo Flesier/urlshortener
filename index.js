@@ -1,80 +1,79 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const app = express();
+const validUrl = require('valid-url');
+const mongoose = require('mongoose');
+const { nanoid } = require('nanoid');  // Using nanoid for short URL generation
 
-// Basic Configuration
+const app = express();
 const port = process.env.PORT || 3000;
 
-const data = [];
+// Connect to MongoDB database
+mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
 
-const isValidURL = (url) => {
-  try {
-    const url = new URL(url);
+// Define URL Schema
+const urlSchema = new Schema({
+  original_url: String,
+  short_url: String,
+});
 
-    return true;
-  } catch (error) {
-    return false;
-  }
-};
+const Url = mongoose.model('Url', urlSchema);
 
-const myLogger = (req, res, next) => {
-  console.log(`${req.method} ${req.path}`);
-
-  next();
-};
-
+// Middleware
 app.use(cors());
 app.use(express.urlencoded({ extended: false }));
-app.use('/public', express.static(`${process.cwd()}/public`));
-app.use(myLogger);
+app.use(express.json());
 
+// Routes
 app.get('/', function(req, res) {
   res.sendFile(process.cwd() + '/views/index.html');
 });
 
-// Your first API endpoint
-app.get('/api/hello', function(req, res) {
-  res.json({ greeting: 'hello API' });
-});
-
-app.post('/api/shorturl', (req, res) => {
+app.post('/api/shorturl', async (req, res) => {
   const { url } = req.body;
-  const urlPattern = /^http(s)?:\/\/(www\.)?\w+(\.\w+)|(:\d+)/;
 
-  console.log({ url });
-
-  if (!urlPattern.test(url)) {
-    return res.json({
-      error: 'invalid url'
-    });
+  if (!validUrl.isWebUri(url)) {
+    return res.json({ error: 'Invalid URL' });
   }
 
-  const short_url = Date.now();
+  try {
+    // Generate a unique short URL using nanoid
+    const short_url = nanoid(6);  // Generate 6 character long random string
 
-  data.unshift({
-    original_url: url,
-    short_url
-  });
+    const existingUrl = await Url.findOne({ original_url: url });
+    if (existingUrl) {
+      // Return existing short URL if it already exists
+      return res.json({ original_url: url, short_url: existingUrl.short_url });
+    }
 
-  res.json({
-    original_url: url,
-    short_url
-  });
-});
+    const newUrl = new Url({ original_url: url, short_url });
+    await newUrl.save();
 
-app.get('/api/shorturl/:id', (req, res) => {
-  const id = Number(req.params.id);
-
-  const url = data.find((el) => el.short_url === id);
-
-  if (!url) {
-    return res.json({ error: 'No short URL found for the given input' });
+    res.json({ original_url: url, short_url });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal server error' });
   }
-
-  res.redirect(url.original_url);
 });
 
+app.get('/api/shorturl/:shortUrl', async (req, res) => {
+  const { shortUrl } = req.params;
+
+  try {
+    const url = await Url.findOne({ short_url });
+
+    if (!url) {
+      return res.json({ error: 'No short URL found for the given input' });
+    }
+
+    res.redirect(url.original_url);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Start the server
 app.listen(port, function() {
-  console.log(`Listening on port ${port}`);
+  console.log(`Server is running on port ${port}`);
 });
