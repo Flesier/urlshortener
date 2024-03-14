@@ -1,100 +1,80 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const validUrl = require('valid-url');
-const mongoose = require('mongoose');
-const dns = require('dns');
-const { promisify } = require('util');
-const { Schema } = mongoose;
-
 const app = express();
+
+// Basic Configuration
 const port = process.env.PORT || 3000;
 
-// Connect to MongoDB database
-mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+const data = [];
 
-// Define URL Schema
-const urlSchema = new Schema({
-  original_url: String,
-  short_url: String // Change to String for storing short URL
-});
+const isValidURL = (url) => {
+  try {
+    const url = new URL(url);
 
-const Url = mongoose.model('Url', urlSchema);
+    return true;
+  } catch (error) {
+    return false;
+  }
+};
 
-// Promisify dns.lookup
-const lookupPromise = promisify(dns.lookup);
+const myLogger = (req, res, next) => {
+  console.log(`${req.method} ${req.path}`);
 
-// Middleware
+  next();
+};
+
 app.use(cors());
 app.use(express.urlencoded({ extended: false }));
-app.use(express.json());
+app.use('/public', express.static(`${process.cwd()}/public`));
+app.use(myLogger);
 
-// Routes
 app.get('/', function(req, res) {
   res.sendFile(process.cwd() + '/views/index.html');
 });
 
-// Function to generate short URL
-const generateShortUrl = async () => {
-  const count = await Url.countDocuments();
-  return (count + 1).toString(); // Convert to string for shorter representation
-};
+// Your first API endpoint
+app.get('/api/hello', function(req, res) {
+  res.json({ greeting: 'hello API' });
+});
 
-app.post('/api/shorturl', async (req, res) => {
+app.post('/api/shorturl', (req, res) => {
   const { url } = req.body;
+  const urlPattern = /^http(s)?:\/\/(www\.)?\w+(\.\w+)|(:\d+)/;
 
-  // Validate URL format
-  if (!validUrl.isWebUri(url)) {
-    return res.json({ error: 'Invalid URL format' });
+  console.log({ url });
+
+  if (!urlPattern.test(url)) {
+    return res.json({
+      error: 'invalid url'
+    });
   }
 
-  // Validate if the hostname is reachable
-  try {
-    const { address } = await lookupPromise(new URL(url).hostname);
-  } catch (error) {
-    return res.json({ error: 'Hostname not reachable' });
-  }
+  const short_url = Date.now();
 
-  try {
-    // Check if URL already exists in the database
-    const existingUrl = await Url.findOne({ original_url: url });
+  data.unshift({
+    original_url: url,
+    short_url
+  });
 
-    if (existingUrl) {
-      return res.json({ original_url: existingUrl.original_url, short_url: existingUrl.short_url });
-    }
-
-    // Generate unique short URL
-    const short_url = await generateShortUrl();
-
-    // Save new URL to database
-    const newUrl = new Url({ original_url: url, short_url });
-    await newUrl.save();
-
-    res.json({ original_url: url, short_url });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error processing request' });
-  }
+  res.json({
+    original_url: url,
+    short_url
+  });
 });
 
-app.get('/api/shorturl/:shortUrl', async (req, res) => {
-  const { shortUrl } = req.params;
+app.get('/api/shorturl/:id', (req, res) => {
+  const id = Number(req.params.id);
 
-  try {
-    const url = await Url.findOne({ short_url: shortUrl });
+  const url = data.find((el) => el.short_url === id);
 
-    if (!url) {
-      return res.json({ error: 'No short URL found for the given input' });
-    }
-
-    res.redirect(url.original_url);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error processing request' });
+  if (!url) {
+    return res.json({ error: 'No short URL found for the given input' });
   }
+
+  res.redirect(url.original_url);
 });
 
-// Start the server
 app.listen(port, function() {
-  console.log(`Server is running on port ${port}`);
+  console.log(`Listening on port ${port}`);
 });
