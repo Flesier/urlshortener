@@ -3,7 +3,9 @@ const express = require('express');
 const cors = require('cors');
 const validUrl = require('valid-url');
 const mongoose = require('mongoose');
-const { nanoid } = require('nanoid');  // Using nanoid for short URL generation
+const dns = require('dns');
+const { promisify } = require('util');
+const { Schema } = mongoose;
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -14,10 +16,13 @@ mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopol
 // Define URL Schema
 const urlSchema = new Schema({
   original_url: String,
-  short_url: String,
+  short_url: Number
 });
 
 const Url = mongoose.model('Url', urlSchema);
+
+// Promisify dns.lookup
+const lookupPromise = promisify(dns.lookup);
 
 // Middleware
 app.use(cors());
@@ -32,20 +37,31 @@ app.get('/', function(req, res) {
 app.post('/api/shorturl', async (req, res) => {
   const { url } = req.body;
 
+  // Validate URL format
   if (!validUrl.isWebUri(url)) {
-    return res.json({ error: 'Invalid URL' });
+    return res.json({ error: 'Invalid URL format' });
+  }
+
+  // Validate if the hostname is reachable
+  try {
+    const { address } = await lookupPromise(new URL(url).hostname);
+  } catch (error) {
+    return res.json({ error: 'Hostname not reachable' });
   }
 
   try {
-    // Generate a unique short URL using nanoid
-    const short_url = nanoid(6);  // Generate 6 character long random string
-
+    // Check if URL already exists in the database
     const existingUrl = await Url.findOne({ original_url: url });
+
     if (existingUrl) {
-      // Return existing short URL if it already exists
-      return res.json({ original_url: url, short_url: existingUrl.short_url });
+      return res.json({ original_url: existingUrl.original_url, short_url: existingUrl.short_url });
     }
 
+    // Generate unique short URL based on database count
+    const count = await Url.countDocuments();
+    const short_url = count + 1;
+
+    // Save new URL to database
     const newUrl = new Url({ original_url: url, short_url });
     await newUrl.save();
 
@@ -60,7 +76,7 @@ app.get('/api/shorturl/:shortUrl', async (req, res) => {
   const { shortUrl } = req.params;
 
   try {
-    const url = await Url.findOne({ short_url });
+    const url = await Url.findOne({ short_url: Number(shortUrl) });
 
     if (!url) {
       return res.json({ error: 'No short URL found for the given input' });
