@@ -1,80 +1,112 @@
+require('dotenv').config();
 const express = require('express');
-const bodyParser = require('body-parser');
-const dns = require('dns');
 const mongoose = require('mongoose');
-
+const mongo = require('mongodb');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const idgenerator = require('idgenerator');
 const app = express();
+//const urlVal = require('urlval');
 
-// Connect to MongoDB
-mongoose.connect('mongodb://localhost:27017/urlShortener', {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
+// Basic Configuration
+const port = process.env.PORT || 3000;
+
+// db connection
+mongoose.connect(process.env.MONGO_URI, { 
+useNewUrlParser: true, 
+useUnifiedTopology: true });
+
+mongoose.connection.on('error')
+
+// url model
+const shortUrlSchema = new mongoose.Schema({
+  original_url : {
+    type: String,
+    required: true
+  },
+  short_url : {
+    type: String,
+    required: true
+  }
+});
+const Url = mongoose.model('Url', shortUrlSchema);
+
+app.use(bodyParser.urlencoded({
+  extended: false
+}))
+
+app.use(cors());
+app.use('/public', express.static(`${process.cwd()}/public`));
+app.use(express.json())
+app.get('/', function(req, res) {
+  res.sendFile(process.cwd() + '/views/index.html');
 });
 
-const urlSchema = new mongoose.Schema({
-    original_url: String,
-    short_url: String
+
+// Your first API endpoint
+app.get('/api/hello', function(req, res) {
+  res.json({ greeting: 'hello API' });
 });
 
-const Url = mongoose.model('Url', urlSchema);
+// post request
+app.post('(api/shorturl', async (req, res) => {
+  const bodyUrl = req.body.url
+  const urlGen = idgenerator.generate()
 
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(express.static('public'));
+  if(!urlVal.isWebUrl(bodyUrl)) {
+    res.status(200).json({
+      error: 'URL Invalid'
+    })
+  } else {
+    try {
+      let findOne = await URL.findOne({
+        original_url: bodyUrl
+      })
 
-app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/views/index.html');
-});
+      if(findOne) {
+        res.json({
+          original_url: findOne.original_url,
+          short_url: findOne.short_url
+        })
 
-app.post('/api/shorturl', (req, res) => {
-    const originalUrl = req.body.url;
+      } else {
+        findOne = new Url({
+          original_url: findOne.original_url,
+          short_url: urlGen
+        })
 
-    // Validate URL
-    dns.lookup(new URL(originalUrl).hostname, (err) => {
-        if (err) {
-            return res.json({ error: 'invalid URL' });
-        }
+        await findOne.save()
 
-        // Check if URL already exists in the database
-        Url.findOne({ original_url: originalUrl }, (err, data) => {
-            if (err) {
-                return res.json({ error: 'Database error' });
-            }
+        res.json({
+          original_url: findOne.original_url,
+          short_url: findOne.short_url
+        })
+      }
 
-            if (data) {
-                return res.json({ original_url: data.original_url, short_url: data.short_url });
-            }
+    } catch (err) {
+      res.status(500).json('server error')
+    }
+  }
+})
 
-            // Create a new short URL
-            const shortUrl = Math.floor(Math.random() * 10000).toString();
-            const newUrl = new Url({
-                original_url: originalUrl,
-                short_url: shortUrl
-            });
+// get method
+app.get('/api/shorturl/:id', async (req, res) => {
+  try {
+    const urlParams = await Url.findOne({
+      short_url: req.params.id
+    })
 
-            newUrl.save((err, data) => {
-                if (err) {
-                    return res.json({ error: 'Database error' });
-                }
+    if(urlParams){
+      return res.redirect(urlParams.original_url)
+    } else {
+      return res.status(404).json('URL not found')
+    }
+  } catch(err) {
+    res.status(500).json('server error')
+  }
+})
 
-                res.json({ original_url: data.original_url, short_url: data.short_url });
-            });
-        });
-    });
-});
 
-app.get('/api/shorturl/:short_url', (req, res) => {
-    const shortUrl = req.params.short_url;
-
-    Url.findOne({ short_url: shortUrl }, (err, data) => {
-        if (err || !data) {
-            return res.json({ error: 'Short URL not found' });
-        }
-
-        res.redirect(data.original_url);
-    });
-});
-
-const PORT = 3000;
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+app.listen(port, function() {
+  console.log(`Listening on port ${port}`);
 });

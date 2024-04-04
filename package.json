@@ -11,6 +11,7 @@
     "cors": "^2.8.5",
     "dotenv": "^8.2.0",
     "express": "^4.17.1",
+    "idgenerator": "^1.0.0",
     "mongoose": "^8.3.0",
     "valid-url": "^1.0.9"
   },
