@@ -1,30 +1,31 @@
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
-const mongo = require('mongodb');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const idgenerator = require('idgenerator');
+const dns = require('dns');
 const app = express();
-//const urlVal = require('urlval');
 
 // Basic Configuration
 const port = process.env.PORT || 3000;
 
 // db connection
-mongoose.connect(process.env.MONGO_URI, { 
-useNewUrlParser: true, 
-useUnifiedTopology: true });
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+});
 
-mongoose.connection.on('error')
+mongoose.connection.on('error', (err) => {
+  console.error('MongoDB connection error:', err);
+});
 
 // url model
 const shortUrlSchema = new mongoose.Schema({
-  original_url : {
+  original_url: {
     type: String,
     required: true
   },
-  short_url : {
+  short_url: {
     type: String,
     required: true
   }
@@ -33,80 +34,69 @@ const Url = mongoose.model('Url', shortUrlSchema);
 
 app.use(bodyParser.urlencoded({
   extended: false
-}))
+}));
 
 app.use(cors());
 app.use('/public', express.static(`${process.cwd()}/public`));
-app.use(express.json())
-app.get('/', function(req, res) {
+app.use(express.json());
+
+app.get('/', function (req, res) {
   res.sendFile(process.cwd() + '/views/index.html');
 });
 
-
-// Your first API endpoint
-app.get('/api/hello', function(req, res) {
+app.get('/api/hello', function (req, res) {
   res.json({ greeting: 'hello API' });
 });
 
-// post request
-app.post('(api/shorturl', async (req, res) => {
-  const bodyUrl = req.body.url
-  const urlGen = idgenerator.generate()
+app.post('/api/shorturl', async (req, res) => {
+  const bodyUrl = req.body.url;
 
-  if(!urlVal.isWebUrl(bodyUrl)) {
-    res.status(200).json({
-      error: 'URL Invalid'
-    })
-  } else {
-    try {
-      let findOne = await URL.findOne({
-        original_url: bodyUrl
-      })
-
-      if(findOne) {
-        res.json({
-          original_url: findOne.original_url,
-          short_url: findOne.short_url
-        })
-
-      } else {
-        findOne = new Url({
-          original_url: findOne.original_url,
-          short_url: urlGen
-        })
-
-        await findOne.save()
-
-        res.json({
-          original_url: findOne.original_url,
-          short_url: findOne.short_url
-        })
-      }
-
-    } catch (err) {
-      res.status(500).json('server error')
-    }
+  // Validate URL format
+  const urlPattern = /^(https?:\/\/)?(www\.)?[\w-]+(\.[\w-]+)+([\w.,@?^=%&:/~+#-]*[\w@?^=%&/~+#-])?$/;
+  if (!urlPattern.test(bodyUrl)) {
+    return res.status(400).json({ error: 'invalid url' });
   }
-})
 
-// get method
+  try {
+    let urlEntry = await Url.findOne({ original_url: bodyUrl });
+
+    if (urlEntry) {
+      return res.json({
+        original_url: urlEntry.original_url,
+        short_url: urlEntry.short_url
+      });
+    } else {
+      const newShortUrl = new Url({
+        original_url: bodyUrl,
+        short_url: String(Math.floor(Math.random() * 10000)) // Generating a random short URL for simplicity
+      });
+
+      await newShortUrl.save();
+
+      return res.json({
+        original_url: newShortUrl.original_url,
+        short_url: newShortUrl.short_url
+      });
+    }
+  } catch (err) {
+    return res.status(500).json({ error: 'server error' });
+  }
+});
+
 app.get('/api/shorturl/:id', async (req, res) => {
   try {
-    const urlParams = await Url.findOne({
-      short_url: req.params.id
-    })
+    const urlEntry = await Url.findOne({ short_url: req.params.id });
 
-    if(urlParams){
-      return res.redirect(urlParams.original_url)
+    if (urlEntry) {
+      return res.redirect(urlEntry.original_url);
     } else {
-      return res.status(404).json('URL not found')
+      return res.status(404).json({ error: 'URL not found' });
     }
-  } catch(err) {
-    res.status(500).json('server error')
+  } catch (err) {
+    return res.status(500).json({ error: 'server error' });
   }
-})
+});
 
-
-app.listen(port, function() {
+app.listen(port, function () {
   console.log(`Listening on port ${port}`);
 });
