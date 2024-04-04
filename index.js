@@ -48,6 +48,8 @@ app.get('/api/hello', function (req, res) {
   res.json({ greeting: 'hello API' });
 });
 
+
+  // Validate URL format
 app.post('/api/shorturl', async (req, res) => {
   const bodyUrl = req.body.url;
 
@@ -82,6 +84,7 @@ app.post('/api/shorturl', async (req, res) => {
     return res.status(500).json({ error: 'server error' });
   }
 });
+
 
 app.get('/api/shorturl/:id', async (req, res) => {
   try {
