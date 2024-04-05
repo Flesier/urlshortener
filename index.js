@@ -1,79 +1,109 @@
 require('dotenv').config();
 const express = require('express');
-const bodyParser = require('body-parser');
-const mongo = ('mongodb');
-const mongoose = require('mongoose')
+const mongoose = require('mongoose');
 const cors = require('cors');
-const dns = require('dns');
-const urlparser = require('url');
-const { json } = require('express/lib/response');
+const bodyParser = require('body-parser');
+const idgenerator = require('idgenerator');
+const validator = require('validator');
 const app = express();
-const shortid = require('shortid');
-const Schema = mongoose.Schema
 
 // Basic Configuration
 const port = process.env.PORT || 3000;
-mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true}); 
 
-app.use(cors());
+// db connection
+mongoose.connect(process.env.MONGO_URI, { 
+  useNewUrlParser: true, 
+  useUnifiedTopology: true 
+});
 
-app.use('/public', express.static(`${process.cwd()}/public`));
+mongoose.connection.on('error', (err) => {
+  console.error('MongoDB connection error:', err);
+});
 
+// url model
+const shortUrlSchema = new mongoose.Schema({
+  original_url: {
+    type: String,
+    required: true
+  },
+  short_url: {
+    type: String,
+    required: true
+  }
+});
+const Url = mongoose.model('Url', shortUrlSchema);
 
-// Your first API endpoint
-
-
-var ShortUrl = mongoose.model('ShortUrl', new Schema({ 
-  short_url: String,
-  original_url: String,
-  suffix: String 
+app.use(bodyParser.urlencoded({
+  extended: false
 }));
 
-app.use(bodyParser.urlencoded({ extended: false }));
-
-app.use(bodyParser.json());
+app.use(cors());
+app.use('/public', express.static(`${process.cwd()}/public`));
+app.use(express.json());
 
 app.get('/', function(req, res) {
   res.sendFile(process.cwd() + '/views/index.html');
 });
 
-app.post("/api/shorturl/", (req, res) => {
-  let client_requested_url = req.body.url
-  let suffix = shortid.generate();
-  let newShortURL = suffix
-  let newURL = new ShortUrl({
-    short_url: "/api/shorturl/" + suffix,
-    original_url: client_requested_url,
-    suffix: suffix
-  });
-  const something = dns.lookup(urlparser.parse(client_requested_url).hostname, (error, address) => {
-    if (!address) {
-      res.json({ error: "Invalid URL"})
-    } else {
-      newURL.save((err, data) => {
-        res.json({
-          "original_url": newURL.original_url,
-          "short_url": newURL.suffix
-        })
-      }
-      )
-    }
-  })
-  // newURL.save((err, doc) => {
-  //   if (err) return console.log(err);
-  //   res.json({
-  //     "original_url": newURL.original_url,
-  //     "short_url": newURL.suffix
-  //   });
-  // });
+// Your first API endpoint
+app.get('/api/hello', function(req, res) {
+  res.json({ greeting: 'hello API' });
 });
 
-app.get("/api/shorturl/:suffix", (req, res) => {
-  let userGeneratedSuffix = req.params.suffix;
-  ShortUrl.find({suffix: userGeneratedSuffix}).then(foundUrls => {
-    let urlForRedirect = foundUrls[0];
-    res.redirect(urlForRedirect.original_url)
-  });
+// post request
+app.post('/api/shorturl', async (req, res) => {
+  const bodyUrl = req.body.url;
+  const urlGen = idgenerator.generate();
+
+  if (!validator.isURL(bodyUrl)) {
+    res.status(200).json({
+      error: 'URL Invalid'
+    });
+  } else {
+    try {
+      let findOne = await Url.findOne({
+        original_url: bodyUrl
+      });
+
+      if (findOne) {
+        res.json({
+          original_url: findOne.original_url,
+          short_url: findOne.short_url
+        });
+      } else {
+        findOne = new Url({
+          original_url: bodyUrl,
+          short_url: urlGen
+        });
+
+        await findOne.save();
+
+        res.json({
+          original_url: findOne.original_url,
+          short_url: findOne.short_url
+        });
+      }
+    } catch (err) {
+      res.status(500).json('server error');
+    }
+  }
+});
+
+// get method
+app.get('/api/shorturl/:id', async (req, res) => {
+  try {
+    const urlParams = await Url.findOne({
+      short_url: req.params.id
+    });
+
+    if (urlParams) {
+      return res.redirect(urlParams.original_url);
+    } else {
+      return res.status(404).json('URL not found');
+    }
+  } catch (err) {
+    res.status(500).json('server error');
+  }
 });
 
 app.listen(port, function() {
