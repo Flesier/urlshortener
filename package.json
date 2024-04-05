@@ -13,6 +13,7 @@
     "express": "^4.17.1",
     "idgenerator": "^1.0.0",
     "mongoose": "^8.3.0",
+    "shortid": "^2.2.16",
     "valid-url": "^1.0.9"
   },
   "license": "MIT"
