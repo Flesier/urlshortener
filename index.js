@@ -3,7 +3,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const { ObjectId } = require('mongodb');  // Import ObjectId from mongodb
+const { ObjectId } = require('mongodb');
 const validator = require('validator');
 
 const app = express();
@@ -71,8 +71,7 @@ app.post('/api/shorturl', async (req, res) => {
           short_url: findOne.short_url
         });
       } else {
-        const urlGen = new ObjectId().toHexString().slice(0, 6);  // Generate short URL using ObjectId
-        console.log('Generated ID:', urlGen);
+        const urlGen = new ObjectId().toHexString().slice(0, 6);
         findOne = new Url({
           original_url: bodyUrl,
           short_url: urlGen
@@ -95,7 +94,7 @@ app.post('/api/shorturl', async (req, res) => {
   }
 });
 
-// get method
+// get method for redirection
 app.get('/api/shorturl/:id', async (req, res) => {
   try {
     const urlParams = await Url.findOne({
