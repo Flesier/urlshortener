@@ -1,12 +1,12 @@
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
-const mongo = require('mongodb');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const idgenerator = require('idgenerator');  // <-- Ensure this is only declared once
-const app = express();
+const idgenerator = require('idgenerator');
 const validator = require('validator');
+
+const app = express();
 
 // Basic Configuration
 const port = process.env.PORT || 3000;
@@ -17,7 +17,7 @@ mongoose.connect(process.env.MONGO_URI, {
   useUnifiedTopology: true 
 });
 
-mongoose.connection.on('error', console.error.bind(console, 'MongoDB connection error:'));
+mongoose.connection.on('error', console.error.bind(console, 'connection error:'));
 
 // url model
 const shortUrlSchema = new mongoose.Schema({
@@ -36,7 +36,7 @@ app.use(bodyParser.urlencoded({
   extended: false
 }));
 
-app.use(cors());
+app.use(cors());  // Add this line to handle CORS
 app.use('/public', express.static(`${process.cwd()}/public`));
 app.use(express.json());
 
@@ -44,19 +44,17 @@ app.get('/', function(req, res) {
   res.sendFile(process.cwd() + '/views/index.html');
 });
 
-// Your first API endpoint
 app.get('/api/hello', function(req, res) {
   res.json({ greeting: 'hello API' });
 });
 
 // post request
-app.post('/api/shorturl', async (req, res) => {  // <-- Fixed the route path
+app.post('/api/shorturl', async (req, res) => {
   const bodyUrl = req.body.url;
-  const urlGen = idgenerator.generate();
 
-  if(!validator.isWebUrl(bodyUrl)) {
+  if (!validator.isURL(bodyUrl)) {
     res.status(200).json({
-      error: 'URL Invalid'
+      error: 'invalid url'
     });
   } else {
     try {
@@ -64,14 +62,15 @@ app.post('/api/shorturl', async (req, res) => {  // <-- Fixed the route path
         original_url: bodyUrl
       });
 
-      if(findOne) {
+      if (findOne) {
         res.json({
           original_url: findOne.original_url,
           short_url: findOne.short_url
         });
       } else {
+        const urlGen = idgenerator.generate(); // Moved inside the else block
         findOne = new Url({
-          original_url: bodyUrl,  // <-- Fixed the assignment
+          original_url: bodyUrl,
           short_url: urlGen
         });
 
@@ -82,6 +81,7 @@ app.post('/api/shorturl', async (req, res) => {  // <-- Fixed the route path
           short_url: findOne.short_url
         });
       }
+
     } catch (err) {
       res.status(500).json('server error');
     }
@@ -95,7 +95,7 @@ app.get('/api/shorturl/:id', async (req, res) => {
       short_url: req.params.id
     });
 
-    if(urlParams){
+    if (urlParams) {
       return res.redirect(urlParams.original_url);
     } else {
       return res.status(404).json('URL not found');
