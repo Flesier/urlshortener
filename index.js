@@ -15,9 +15,9 @@ const port = process.env.PORT || 3000;
 mongoose.connect(process.env.MONGO_URI, { 
   useNewUrlParser: true, 
   useUnifiedTopology: true 
-});
-
-mongoose.connection.on('error', console.error.bind(console, 'connection error:'));
+})
+.then(() => console.log('MongoDB connected...'))
+.catch(err => console.log(err));
 
 // url model
 const shortUrlSchema = new mongoose.Schema({
@@ -36,7 +36,7 @@ app.use(bodyParser.urlencoded({
   extended: false
 }));
 
-app.use(cors());  // Add this line to handle CORS
+app.use(cors());
 app.use('/public', express.static(`${process.cwd()}/public`));
 app.use(express.json());
 
@@ -68,7 +68,7 @@ app.post('/api/shorturl', async (req, res) => {
           short_url: findOne.short_url
         });
       } else {
-        const urlGen = idgenerator.generate(); // Moved inside the else block
+        const urlGen = idgenerator.generate();
         findOne = new Url({
           original_url: bodyUrl,
           short_url: urlGen
@@ -83,7 +83,10 @@ app.post('/api/shorturl', async (req, res) => {
       }
 
     } catch (err) {
-      res.status(500).json('server error');
+      console.log(err);  // Log the error for debugging
+      res.status(500).json({
+        error: 'server error'
+      });
     }
   }
 });
@@ -98,10 +101,15 @@ app.get('/api/shorturl/:id', async (req, res) => {
     if (urlParams) {
       return res.redirect(urlParams.original_url);
     } else {
-      return res.status(404).json('URL not found');
+      return res.status(404).json({
+        error: 'URL not found'
+      });
     }
   } catch(err) {
-    res.status(500).json('server error');
+    console.log(err);  // Log the error for debugging
+    res.status(500).json({
+      error: 'server error'
+    });
   }
 });
 
