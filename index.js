@@ -3,7 +3,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const idgenerator = require('idgenerator');
+const { ObjectId } = require('mongodb');  // Import ObjectId from mongodb
 const validator = require('validator');
 
 const app = express();
@@ -19,7 +19,7 @@ mongoose.connect(process.env.MONGO_URI, {
 .then(() => console.log('MongoDB connected...'))
 .catch(err => {
   console.log('MongoDB connection error:', err);
-  process.exit(1);  // Exit the process if MongoDB connection fails
+  process.exit(1);
 });
 
 // url model
@@ -71,8 +71,8 @@ app.post('/api/shorturl', async (req, res) => {
           short_url: findOne.short_url
         });
       } else {
-        const urlGen = idgenerator.generate();
-        console.log('Generated ID:', urlGen);  // Log the generated ID
+        const urlGen = new ObjectId().toHexString().slice(0, 6);  // Generate short URL using ObjectId
+        console.log('Generated ID:', urlGen);
         findOne = new Url({
           original_url: bodyUrl,
           short_url: urlGen
@@ -87,7 +87,7 @@ app.post('/api/shorturl', async (req, res) => {
       }
 
     } catch (err) {
-      console.log('Post request error:', err);  // Log the error for debugging
+      console.log('Post request error:', err);
       res.status(500).json({
         error: 'server error'
       });
@@ -110,7 +110,7 @@ app.get('/api/shorturl/:id', async (req, res) => {
       });
     }
   } catch(err) {
-    console.log('Get request error:', err);  // Log the error for debugging
+    console.log('Get request error:', err);
     res.status(500).json({
       error: 'server error'
     });
