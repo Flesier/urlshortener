@@ -17,7 +17,10 @@ mongoose.connect(process.env.MONGO_URI, {
   useUnifiedTopology: true 
 })
 .then(() => console.log('MongoDB connected...'))
-.catch(err => console.log(err));
+.catch(err => {
+  console.log('MongoDB connection error:', err);
+  process.exit(1);  // Exit the process if MongoDB connection fails
+});
 
 // url model
 const shortUrlSchema = new mongoose.Schema({
@@ -69,6 +72,7 @@ app.post('/api/shorturl', async (req, res) => {
         });
       } else {
         const urlGen = idgenerator.generate();
+        console.log('Generated ID:', urlGen);  // Log the generated ID
         findOne = new Url({
           original_url: bodyUrl,
           short_url: urlGen
@@ -83,7 +87,7 @@ app.post('/api/shorturl', async (req, res) => {
       }
 
     } catch (err) {
-      console.log(err);  // Log the error for debugging
+      console.log('Post request error:', err);  // Log the error for debugging
       res.status(500).json({
         error: 'server error'
       });
@@ -106,7 +110,7 @@ app.get('/api/shorturl/:id', async (req, res) => {
       });
     }
   } catch(err) {
-    console.log(err);  // Log the error for debugging
+    console.log('Get request error:', err);  // Log the error for debugging
     res.status(500).json({
       error: 'server error'
     });
