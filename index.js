@@ -70,7 +70,8 @@ app.post('/api/shorturl', async (req, res) => {
           short_url: findOne.short_url
         });
       } else {
-        const urlGen = bodyUrl.length.toString(36);
+        const { nanoid } = await import('nanoid');
+        const urlGen = nanoid(8); // Generate a unique, URL-friendly ID with a length of 8 characters
         findOne = new Url({
           original_url: bodyUrl,
           short_url: urlGen
